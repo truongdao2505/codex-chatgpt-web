@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { defaultBrokerEndpoint, defaultConfig, ZERO_RISK_CHATGPT_CONNECTOR_NAME } from "../src/config";
 import { LAUNCHER_BROWSER_IDLE_URL } from "../src/launcher-browser-host";
+import { DevChatStore } from "../src/dev-chat/session";
 
 setDefaultTimeout(30_000);
 
@@ -191,6 +192,78 @@ test("DEV chat list works without starting launcher, broker, or Responses servic
   }
 });
 
+test("DEV chat list JSON returns an empty array without creating a profile", async () => {
+  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-cli-dev-list-json-"));
+  try {
+    const result = await runCli(["dev", "list", "--json"], {
+      ...process.env,
+      CODEX_WEB_GPT_DEV_HOME: join(root, "dev"),
+      CODEX_CHATGPT_WEB_HOME: join(root, "app"),
+      CODEX_HOME: join(root, "codex"),
+    });
+    expect(result).toEqual({ exitCode: 0, stdout: "[]\n", stderr: "" });
+    expect(existsSync(join(root, "dev"))).toBe(false);
+    expect(existsSync(join(root, "app"))).toBe(false);
+    expect(existsSync(join(root, "codex"))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("DEV chat list JSON exposes only summaries in newest-first order", async () => {
+  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-cli-dev-list-summaries-"));
+  try {
+    const store = new DevChatStore(join(root, "dev", "chats"));
+    const older = store.loadOrCreate("older", "chatgpt-web/light", root).state;
+    const newer = store.loadOrCreate("newer", "chatgpt-web/high", root).state;
+    newer.input = [{ role: "user", content: "private conversation content" }];
+    newer.turns = 3;
+    newer.compactions = 1;
+    newer.syntheticFills = 2;
+    for (const [state, updatedAt] of [
+      [older, "2026-01-01T00:00:00.000Z"],
+      [newer, "2026-01-02T00:00:00.000Z"],
+    ] as const) {
+      store.save(state);
+      writeFileSync(join(store.root, `${state.name}.json`), JSON.stringify({ ...state, updatedAt }));
+    }
+    const result = await runCli(["dev", "list", "--json"], {
+      ...process.env,
+      CODEX_WEB_GPT_DEV_HOME: join(root, "dev"),
+      CODEX_CHATGPT_WEB_HOME: join(root, "app"),
+      CODEX_HOME: join(root, "codex"),
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout)).toEqual([
+      { name: "newer", model: newer.model, turns: 3, compactions: 1, syntheticFills: 2, inputItems: 1, updatedAt: "2026-01-02T00:00:00.000Z" },
+      { name: "older", model: older.model, turns: 0, compactions: 0, syntheticFills: 0, inputItems: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+    expect(result.stdout).not.toContain("private conversation content");
+    expect(result.stdout).not.toContain(newer.threadId);
+    expect(result.stdout).not.toContain(root);
+    expect(existsSync(join(root, "dev", "config.json"))).toBe(false);
+    expect(existsSync(join(root, "codex"))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("DEV chat list JSON rejects unknown arguments", async () => {
+  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-cli-dev-list-invalid-"));
+  try {
+    const result = await runCli(["dev", "list", "--json", "--unknown"], {
+      ...process.env,
+      CODEX_WEB_GPT_DEV_HOME: join(root, "dev"),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Unknown DEV arguments: --unknown");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("DEV help exposes separate history-fill and live composer-fill operations", async () => {
   const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-cli-dev-help-"));
   try {
@@ -203,6 +276,7 @@ test("DEV help exposes separate history-fill and live composer-fill operations",
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("/fill TOKENS");
     expect(result.stdout).toContain("/send-fill TOKENS");
+    expect(result.stdout).toContain("dev list [--json]");
     expect(result.stderr).toBe("");
   } finally {
     rmSync(root, { recursive: true, force: true });

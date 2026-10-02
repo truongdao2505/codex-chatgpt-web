@@ -39,7 +39,7 @@ Usage:
   codex-chatgpt-web dev setup --browser-only [--automatic-browser-interaction]
   codex-chatgpt-web dev setup --full --tunnel-id ID --runtime-key-file PATH [--automatic-browser-interaction|--zero-risk-browser-interaction]
   codex-chatgpt-web dev chat NAME [--model MODEL] [MESSAGE]
-  codex-chatgpt-web dev list
+  codex-chatgpt-web dev list [--json]
 
 Repository shortcut:
   bun run dev:launcher
@@ -272,8 +272,13 @@ export async function runDevCommand(args: string[]): Promise<void> {
   if (action === "list") {
     activateDevProfileEnvironment(paths);
     const store = new DevChatStore(paths.chatsPath);
+    const json = takeFlag(args, "--json");
     if (args.length > 0) throw new Error(`Unknown DEV arguments: ${args.join(" ")}`);
     const chats = store.list();
+    if (json) {
+      stdout.write(`${JSON.stringify(chats, null, 2)}\n`);
+      return;
+    }
     if (chats.length === 0) {
       stdout.write("No named DEV chats yet.\n");
       return;
