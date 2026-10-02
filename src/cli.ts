@@ -47,7 +47,7 @@ Usage:
   codex-chatgpt-web dev status [--json]
   codex-chatgpt-web dev setup <--browser-only|--full> [options]
   codex-chatgpt-web dev chat NAME [--model MODEL] [MESSAGE]
-  codex-chatgpt-web dev list
+  codex-chatgpt-web dev list [--json]
   codex-chatgpt-web serve
   codex-chatgpt-web mcp [--broker-socket PATH]
   codex-chatgpt-web service <status|install|start|restart|stop|cancel-turns>

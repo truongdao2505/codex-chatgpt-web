@@ -37,6 +37,17 @@ Persistent interactive chat:
 bun run dev:chat compaction-lab
 ```
 
+List saved chats without starting the launcher or configuring a profile:
+
+```bash
+bun run src/cli.ts dev list
+bun run src/cli.ts dev list --json
+```
+
+`--json` returns an array of chat summaries, newest updated first, or `[]` when no chats exist.
+Each summary contains `name`, `model`, `turns`, `compactions`, `syntheticFills`, `inputItems`, and
+`updatedAt`. Conversation content, thread IDs, and working-directory paths are not included.
+
 After optional Full/MCP setup, the same command also exposes simulated outer tools:
 
 ```bash
